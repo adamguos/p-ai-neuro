@@ -14,19 +14,11 @@ from keras.layers import Embedding
 from keras.layers import LSTM
 from keras.utils import to_categorical
 
-eeg_df = pd.read_csv("eeg_test.csv", sep="\t")
-# eeg_df = eeg_df[["Time", "thumb_near"]]	# drop all columns except Time and thumb_near
-eeg_df = eeg_df.dropna()	# drop all rows without a thumb_near value
-# eeg_df = (eeg_df - eeg_df.min()) / (eeg_df.max() - eeg_df.min())	# normalise all columns to be between 0 and 1
+###
+# Helper functions to preprocess data
+###
 
-events_df = pd.read_csv("eeg_events.csv", sep="\t")
-events_df = events_df[(events_df.type >= 1536) & (events_df.type <= 1542)]	# only keep rows corresponding to hand movement events
-
-num_of_samples = events_df.shape[0]	# num of samples (hand movement events), given by num of rows
-n_features = eeg_df.shape[1] - 1	# num of eeg channels, given by num of columns subtract time column
-time_steps = 2096
-
-def slice_eeg_into_samples(eeg, events):
+def slice_eeg_into_samples(eeg, events, sample_length):
 	samples_list = []
 
 	for index, row in events.iterrows():
@@ -39,7 +31,8 @@ def slice_eeg_into_samples(eeg, events):
 	
 	# samples are not exactly the same length
 	# pad on filler entries to make every sample as long as the longest one
-	samples_list = pad_samples(samples_list)
+	# if sample_length is specified, then just pad every sample to sample_length
+	samples_list = pad_samples(samples_list, sample_length)
 	
 	# the loop leaves out measurements of the last event, since each iteration appends datapoints that occur before this event
 	# add it here, specifying number of rows and dropping time column
@@ -58,14 +51,18 @@ def slice_eeg_into_samples(eeg, events):
 	
 	return eeg_array
 
-def pad_samples(eeg_old):
+def pad_samples(eeg_old, sample_length):
 	eeg_new = []
 
+	# if sample_length is non-zero, then use it instead of figuring out the length
 	longest = 0
-	for sample in eeg_old:
-		l = len(sample.index)
-		if l > longest:
-			longest = l
+	if sample_length == 0:
+		for sample in eeg_old:
+			l = len(sample.index)
+			if l > longest:
+				longest = l
+	else:
+		longest = sample_length
 	
 	# pad each sample with the last row
 	for sample in eeg_old:
@@ -92,37 +89,105 @@ def split_train_test(eeg, events):
 	
 	return X_train, X_test, y_train, y_test
 
-eeg_samples = slice_eeg_into_samples(eeg_df, events_df)
-events_1hot, lb = one_hot_events(events_df)
+###
+# Legacy
+###
 
-# event_types = events_df["type"].to_numpy()
-# event_types = event_types - event_types.min() + 1
-# events_1hot = to_categorical(event_types)
+def old():
+	eeg_df = pd.read_csv("eeg_test.csv", sep="\t")
+	# eeg_df = eeg_df[["Time", "thumb_near"]]	# drop all columns except Time and thumb_near
+	eeg_df = eeg_df.dropna()	# drop all rows without a thumb_near value
+	# eeg_df = (eeg_df - eeg_df.min()) / (eeg_df.max() - eeg_df.min())	# normalise all columns to be between 0 and 1
 
-X_train, X_test, y_train, y_test = split_train_test(eeg_samples, events_1hot)
+	events_df = pd.read_csv("eeg_events.csv", sep="\t")
+	# events_df = events_df[(events_df.type >= 1536) & (events_df.type <= 1542)]	# only keep rows corresponding to hand movement events
+
+###
+# Main
+###
+
+def load_data():
+	time_steps = 2200
+
+	eeg_all = np.zeros(0)
+	events_all = np.zeros(0)
+	for i in range(1, 11):
+		print("starting file {}".format(i))
+		eeg_df = pd.read_csv("motorexecution1/subject1_run{}.csv".format(i), sep="\t")
+		eeg_df = eeg_df.dropna()
+		events_df = pd.read_csv("motorexecution1/subject1_events{}.csv".format(i), sep="\t")
+		events_df = events_df[(events_df.type >= 1536) & (events_df.type <= 1542)]	# only keep rows corresponding to hand movement events
+		print("read")
+
+		eeg_samples = slice_eeg_into_samples(eeg_df, events_df, time_steps)
+		events_1hot, lb = one_hot_events(events_df)
+		print("sliced")
+
+		assert eeg_samples.shape[0] == events_1hot.shape[0], "eeg_samples dim does not match events_1hot"
+
+		if not eeg_all.any():
+			eeg_all = eeg_samples
+			events_all = events_1hot
+		else:
+			eeg_all = np.concatenate((eeg_all, eeg_samples), axis=0)
+			events_all = np.concatenate((events_all, events_1hot), axis=0)
+		
+		print("file {} done".format(i))
+		print("dimensions:", eeg_all.shape, events_all.shape, "\n")
+
+	assert eeg_all.shape[0] == events_all.shape[0], "eeg_all dim does not match events_all"
+
+	np.save("motorexecution1/eeg_all", eeg_all)
+	np.save("motorexecution1/events_all", events_all)
+
+	return eeg_all, events_all
+
+# eeg_all, events_all = load_data()
+eeg_all = np.load("motorexecution1/eeg_all.npy")
+events_all = np.load("motorexecution1/events_all.npy")
+
+num_of_samples = eeg_all.shape[0]	# num of samples (hand movement events)
+n_features = eeg_all.shape[2]		# num of eeg channels
+time_steps = eeg_all.shape[1]		# num of time steps in each sample
+event_types = events_all.shape[1]	# num of event types
+
+X_train, X_test, y_train, y_test = split_train_test(eeg_all, events_all)
 
 # Train LSTM model, using options from EEG paper linked at the top
-# dense layer for 1_hot: https://stackoverflow.com/questions/49604765/create-model-using-one-hot-encoding-in-keras
-# model1 = Sequential()
-# model1.add(Dense(512, input_shape=(time_steps, n_features)))
-# model1.add(LSTM(128))
-# model1.add(Dense(7, activation="softmax"))
+# dense layer for 1_hot: https://stackoverflow.com/questions/49604765/
 
-# model1.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
+def train_model():
+	model = Sequential()
+	model.add(LSTM(100, return_sequences=False, input_shape=(time_steps, n_features)))
+	model.add(Dropout(0.5))
+	model.add(Dense(event_types, activation="sigmoid"))
 
-# model1.fit(X_train, y_train, batch_size=16, epochs=42)
-# score = model1.evaluate(X_test, y_test, batch_size=16)
+	model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
 
-# model1.save("model1.h5")
+	history = model.fit(X_train, y_train, batch_size=16, epochs=10, verbose=1)
+	score = model.evaluate(X_test, y_test, batch_size=16)
 
-model2 = Sequential()
-model2.add(LSTM(100, return_sequences=False, input_shape=(time_steps, n_features)))
-model2.add(Dropout(0.5))
-model2.add(Dense(7, activation="sigmoid"))
+	# Plot training & validation accuracy values
+	plt.plot(history.history['acc'])
+	plt.plot(history.history['val_acc'])
+	plt.title('Model accuracy')
+	plt.ylabel('Accuracy')
+	plt.xlabel('Epoch')
+	plt.legend(['Train', 'Test'], loc='upper left')
+	plt.show()
 
-model2.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
+	# Plot training & validation loss values
+	plt.plot(history.history['loss'])
+	plt.plot(history.history['val_loss'])
+	plt.title('Model loss')
+	plt.ylabel('Loss')
+	plt.xlabel('Epoch')
+	plt.legend(['Train', 'Test'], loc='upper left')
+	plt.show()
 
-model2.fit(X_train, y_train, batch_size=1, epochs=42)
-score = model2.evaluate(X_test, y_test, batch_size=1)
+	model.save("model_10.h5")
 
-model2.save("model2.h5")
+	return model
+
+model = train_model()
+# model = load_model("model.h5")
