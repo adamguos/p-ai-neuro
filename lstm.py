@@ -29,6 +29,10 @@ def slice_eeg_into_samples(eeg, events, sample_length):
 		samples_list.append(this_slice)
 		eeg = eeg[index_range:].reset_index(drop=True)	# drop rows that happened before this event
 	
+	# drop columns that are not "eeg.x"
+	to_drop = [i for i in eeg.columns if not i[:3] == "eeg" and not i == "Time"]
+	eeg = eeg.drop(to_drop, axis=1)
+
 	# samples are not exactly the same length
 	# pad on filler entries to make every sample as long as the longest one
 	# if sample_length is specified, then just pad every sample to sample_length
@@ -140,11 +144,11 @@ def load_data():
 	np.save("motorexecution1/eeg_all", eeg_all)
 	np.save("motorexecution1/events_all", events_all)
 
-	return eeg_all, events_all
+	return eeg_all, events_all, lb
 
-# eeg_all, events_all = load_data()
-eeg_all = np.load("motorexecution1/eeg_all.npy")
-events_all = np.load("motorexecution1/events_all.npy")
+eeg_all, events_all, lb = load_data()
+# eeg_all = np.load("motorexecution1/eeg_all.npy")
+# events_all = np.load("motorexecution1/events_all.npy")
 
 num_of_samples = eeg_all.shape[0]	# num of samples (hand movement events)
 n_features = eeg_all.shape[2]		# num of eeg channels
@@ -164,28 +168,28 @@ def train_model():
 
 	model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
 
-	history = model.fit(X_train, y_train, batch_size=16, epochs=10, verbose=1)
+	history = model.fit(X_train, y_train, batch_size=16, epochs=50, verbose=1)
 	score = model.evaluate(X_test, y_test, batch_size=16)
 
 	# Plot training & validation accuracy values
-	plt.plot(history.history['acc'])
-	plt.plot(history.history['val_acc'])
-	plt.title('Model accuracy')
-	plt.ylabel('Accuracy')
-	plt.xlabel('Epoch')
-	plt.legend(['Train', 'Test'], loc='upper left')
-	plt.show()
+	# plt.plot(history.history['acc'])
+	# plt.plot(history.history['val_acc'])
+	# plt.title('Model accuracy')
+	# plt.ylabel('Accuracy')
+	# plt.xlabel('Epoch')
+	# plt.legend(['Train', 'Test'], loc='upper left')
+	# plt.show()
 
 	# Plot training & validation loss values
-	plt.plot(history.history['loss'])
-	plt.plot(history.history['val_loss'])
-	plt.title('Model loss')
-	plt.ylabel('Loss')
-	plt.xlabel('Epoch')
-	plt.legend(['Train', 'Test'], loc='upper left')
-	plt.show()
+	# plt.plot(history.history['loss'])
+	# plt.plot(history.history['val_loss'])
+	# plt.title('Model loss')
+	# plt.ylabel('Loss')
+	# plt.xlabel('Epoch')
+	# plt.legend(['Train', 'Test'], loc='upper left')
+	# plt.show()
 
-	model.save("model_10.h5")
+	model.save("model.h5")
 
 	return model
 
