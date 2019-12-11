@@ -1,5 +1,10 @@
 # https://github.com/Cerebro409/EEG-Classification-Using-Recurrent-Neural-Network/blob/master/eeg_lstm-v2.ipynb
 
+# Changelog:
+
+# Apply detrend to eeg columns
+# Drop eeg columns that are not named "eeg.{x}"
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -21,7 +26,13 @@ from keras.utils import to_categorical
 ###
 
 def detrend_eeg(eeg):
-	return eeg.apply(signal.detrend, axis=0)
+	for (name, col) in eeg.iteritems():
+		if not name == "Time":
+			eeg[name] = signal.detrend(col)
+	
+	return eeg
+
+	# return eeg.drop("Time").apply(signal.detrend, axis=0)
 
 def slice_eeg_into_samples(eeg, events, sample_length):
 	samples_list = []
@@ -199,7 +210,7 @@ def train_model():
 
 	model.save("model.h5")
 
-	return model
+	return model, score
 
-model = train_model()
+model, score = train_model()
 # model = load_model("model.h5")
