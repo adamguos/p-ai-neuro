@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from scipy import signal
+
 from sklearn import preprocessing
 from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -18,8 +20,15 @@ from keras.utils import to_categorical
 # Helper functions to preprocess data
 ###
 
+def detrend_eeg(eeg):
+	return eeg.apply(signal.detrend, axis=0)
+
 def slice_eeg_into_samples(eeg, events, sample_length):
 	samples_list = []
+	
+	# drop columns that are not "eeg.x"
+	to_drop = [i for i in eeg.columns if not i[:3] == "eeg" and not i == "Time"]
+	eeg = eeg.drop(to_drop, axis=1)
 
 	for index, row in events.iterrows():
 		index_range = eeg[eeg["Time"] >= row["latency"]].index[0]	# index of first eeg datapoint that happens after this event
@@ -28,10 +37,6 @@ def slice_eeg_into_samples(eeg, events, sample_length):
 		
 		samples_list.append(this_slice)
 		eeg = eeg[index_range:].reset_index(drop=True)	# drop rows that happened before this event
-	
-	# drop columns that are not "eeg.x"
-	to_drop = [i for i in eeg.columns if not i[:3] == "eeg" and not i == "Time"]
-	eeg = eeg.drop(to_drop, axis=1)
 
 	# samples are not exactly the same length
 	# pad on filler entries to make every sample as long as the longest one
@@ -122,6 +127,9 @@ def load_data():
 		events_df = pd.read_csv("motorexecution1/subject1_events{}.csv".format(i), sep="\t")
 		events_df = events_df[(events_df.type >= 1536) & (events_df.type <= 1542)]	# only keep rows corresponding to hand movement events
 		print("read")
+
+		# Apply detrend to eeg columns
+		eeg_df = detrend_eeg(eeg_df)
 
 		eeg_samples = slice_eeg_into_samples(eeg_df, events_df, time_steps)
 		events_1hot, lb = one_hot_events(events_df)
