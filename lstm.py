@@ -26,6 +26,7 @@ from keras.utils import to_categorical
 ###
 
 def detrend_eeg(eeg):
+	# make sure not to alter time column
 	for (name, col) in eeg.iteritems():
 		if not name == "Time":
 			eeg[name] = signal.detrend(col)
@@ -110,19 +111,6 @@ def split_train_test(eeg, events):
 	return X_train, X_test, y_train, y_test
 
 ###
-# Legacy
-###
-
-def old():
-	eeg_df = pd.read_csv("eeg_test.csv", sep="\t")
-	# eeg_df = eeg_df[["Time", "thumb_near"]]	# drop all columns except Time and thumb_near
-	eeg_df = eeg_df.dropna()	# drop all rows without a thumb_near value
-	# eeg_df = (eeg_df - eeg_df.min()) / (eeg_df.max() - eeg_df.min())	# normalise all columns to be between 0 and 1
-
-	events_df = pd.read_csv("eeg_events.csv", sep="\t")
-	# events_df = events_df[(events_df.type >= 1536) & (events_df.type <= 1542)]	# only keep rows corresponding to hand movement events
-
-###
 # Main
 ###
 
@@ -165,9 +153,9 @@ def load_data():
 
 	return eeg_all, events_all, lb
 
-eeg_all, events_all, lb = load_data()
-# eeg_all = np.load("motorexecution1/eeg_all.npy")
-# events_all = np.load("motorexecution1/events_all.npy")
+# eeg_all, events_all, lb = load_data()
+eeg_all = np.load("motorexecution1/eeg_all.npy")
+events_all = np.load("motorexecution1/events_all.npy")
 
 num_of_samples = eeg_all.shape[0]	# num of samples (hand movement events)
 n_features = eeg_all.shape[2]		# num of eeg channels
@@ -183,7 +171,8 @@ def train_model():
 	model = Sequential()
 	model.add(LSTM(100, return_sequences=False, input_shape=(time_steps, n_features)))
 	model.add(Dropout(0.5))
-	model.add(Dense(event_types, activation="sigmoid"))
+	model.add(Dense(event_types))
+	model.add(Dense(event_types, activation="softmax"))
 
 	model.compile(loss="binary_crossentropy", optimizer="rmsprop", metrics=["accuracy"])
 
@@ -208,9 +197,16 @@ def train_model():
 	# plt.legend(['Train', 'Test'], loc='upper left')
 	# plt.show()
 
-	model.save("model.h5")
+	model.save("model_50epochs_2dense_softmax.h5")
 
 	return model, score
 
-model, score = train_model()
-# model = load_model("model.h5")
+def one_hot_decode(one_hot):
+	return np.argmax(one_hot, axis=1)
+
+def compare(y_test, y_pred):
+	return np.mean(np.equal(one_hot_decode(y_test), one_hot_decode(y_pred)))
+
+# model, score = train_model()
+model = load_model("model_250epochs.h5")
+y_pred = model.predict(X_test)
