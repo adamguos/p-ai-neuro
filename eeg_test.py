@@ -1,3 +1,4 @@
+# EEG data import test
 # https://github.com/Cerebro409/EEG-Classification-Using-Recurrent-Neural-Network/blob/master/eeg_lstm-v2.ipynb
 
 import matplotlib.pyplot as plt

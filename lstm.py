@@ -1,3 +1,4 @@
+# Main training/testing script
 # https://github.com/Cerebro409/EEG-Classification-Using-Recurrent-Neural-Network/blob/master/eeg_lstm-v2.ipynb
 
 # Changelog:
