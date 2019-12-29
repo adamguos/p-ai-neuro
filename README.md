@@ -1,4 +1,4 @@
-## P-ai (Pomona College) Fall 2019 project: Electroencephalogram classification using recurrent neural networks
+## [P-ai (Pomona College)](https://www.p-ai.org/) Fall 2019 project: Electroencephalogram classification using recurrent neural networks
 
 Classifies EEG signals based on executed or imagined motor signals, using Keras RNN/LSTM. Achieves ~70% accuracy currently.
 
